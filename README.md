@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://paysgator.com/paysgator_logo.png" alt="Paysgator" width="300"/>
+  <img src="https://paysgator.com/paysgator.png" alt="Paysgator" width="300"/>
 </div>
 
 # Paysgator FOSSBilling Payment Gateway
