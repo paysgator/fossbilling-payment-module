@@ -45,7 +45,8 @@ class Payment_Adapter_Paysgator
                 'webhook_secret' => [
                     'text', [
                         'label' => 'Webhook Secret',
-                        'description' => 'Optional: Enter your Paysgator Webhook Secret for signature verification',
+                        'description' => 'Required for webhook signature verification. Enter your Paysgator Webhook Secret.',
+                        'validators' => ['nonempty'],
                     ],
                 ],
                 'test_mode' => [
@@ -70,7 +71,7 @@ class Payment_Adapter_Paysgator
         $invoiceService = $this->di['mod_service']('Invoice');
         $invoice = $invoiceService->toApiArray($invoiceModel, true);
 
-        $externalTxId = substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $invoice_id . 'inv' . time()), 0, 15);
+        $externalTxId = 'inv-' . $invoice_id;
 
        $data = [
            'amount' => (double)$invoiceService->getTotalWithTax($invoiceModel),
@@ -86,7 +87,7 @@ class Payment_Adapter_Paysgator
            ],
        ];
 
-        $apiUrl = 'https://paysgator.com/api/v1/payment/create';
+        $apiUrl = $this->config['test_mode'] ? 'https://sandbox.paysgator.com/api/v1/payment/create' : 'https://paysgator.com/api/v1/payment/create';
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $apiUrl);
@@ -100,35 +101,51 @@ class Payment_Adapter_Paysgator
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
         $response = curl_exec($ch);
-        $result = json_decode($response, true);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
+        
+        if ($response === false) {
+            throw new Exception('CURL error: ' . $curlError);
+        }
+        
+        $result = json_decode($response, true);
+        if ($httpCode !== 200 || json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid API response: ' . $response);
+        }
 
         if (isset($result['success']) && $result['success'] && isset($result['data']['checkoutUrl'])) {
             // Retorna um JavaScript para redirecionamento imediato
             return '<script type="text/javascript">window.location.href = "' . $result['data']['checkoutUrl'] . '";</script>';
         }
 
-        return 'Erro ao processar pagamento com Paysgator: ' . $response . '. Por favor, contate o suporte.' . json_encode($data) . 'Dados enviados';
+        throw new Exception('Paysgator API error: ' . ($result['message'] ?? 'Unknown error') . ' | Response: ' . $response);
     }
 
     /**
      * Processa o Webhook/IPN
      */
-    public function processTransaction(Api_Handler $api_admin, int $id, array $data, int $gateway_id)
+    public function processTransaction(Api_Handler $api_admin, int $id, array $data, int $gateway_id): bool
     {
         try {
             $rawPayload = file_get_contents('php://input');
+            if ($rawPayload === false) {
+                throw new Exception('Failed to read webhook payload');
+            }
             $webhookData = json_decode($rawPayload, true);
-            
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new Exception('Invalid JSON payload');
+            }
             // Verificação de Assinatura
             $signature = $_SERVER['HTTP_X_PAYSGATOR_SIGNATURE'] ?? '';
             $webhookSecret = $this->config['webhook_secret'] ?? '';
 
-            if (!empty($webhookSecret)) {
-                $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
-                if (!hash_equals($expectedSignature, $signature)) {
-                    throw new Exception('Invalid webhook signature');
-                }
+            if (empty($webhookSecret)) {
+                throw new Exception('Webhook secret not configured');
+            }
+            $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
+            if (!hash_equals($expectedSignature, $signature)) {
+                throw new Exception('Invalid webhook signature');
             }
 
             if (($webhookData['event'] ?? '') !== 'payment.success') {
@@ -145,11 +162,14 @@ class Payment_Adapter_Paysgator
             $clientService = $this->di['mod_service']('Client');
             $invoiceService = $this->di['mod_service']('Invoice');
             
-            $client = $clientService->get(['id' => $invoice->client_id]);
-            $amount = $eventData['amount'] ?? $invoiceService->getTotalWithTax($invoice);
+            $client = $clientService->get(['id' => (int)$invoice->client_id]);
+            if (!$client) {
+                throw new Exception('Client not found: ' . $invoice->client_id);
+            }
+            $amount = (float)($eventData['amount'] ?? $invoiceService->getTotalWithTax($invoice));
 
             // Adicionar fundos e marcar como pago
-            $tx_desc = $gateway->title . ' Webhook No: ' . ($eventData['transactionId'] ?? $id);
+            $tx_desc = $gateway->title . ' Webhook No: ' . ($eventData['transactionId'] ?? (string)$id);
             $clientService->addFunds($client, $amount, $tx_desc, []);
             $invoiceService->markAsPaid($invoice, true, true);
 
@@ -164,7 +184,7 @@ class Payment_Adapter_Paysgator
             return $this->di['db']->store($tx);
 
         } catch (Exception $e) {
-            error_log('Paysgator Error: ' . $e->getMessage());
+            error_log('Paysgator Error: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
             return false;
         }
     }
