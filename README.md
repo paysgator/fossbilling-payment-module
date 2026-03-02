@@ -48,7 +48,7 @@ Paysgator will send webhooks to notify FOSSBilling of payment events.
 
 **Webhook URL**: `https://your-fossbilling-domain.com/ipn.php?gateway_id=X`
 
-(Replace `X` with your Paysgator gateway ID from FOSSBilling)
+(Replace `X` with your Paysgator gateway ID from FOSSBilling Admin Area after activation)
 
 Configure this URL in your Paysgator Dashboard under Webhooks settings.
 
@@ -61,15 +61,17 @@ The module supports HMAC-SHA256 signature verification. To enable:
 1. Get your Webhook Secret from Paysgator Dashboard
 2. Enter it in the **Webhook Secret** field in FOSSBilling gateway configuration
 
+**Important**: Always verify webhook signatures in production to prevent fraudulent payment notifications.
 ## Transaction ID Format
 
 The module uses a sanitized `externalTransactionId` format: `inv-{invoiceId}` (max 15 characters, alphanumeric with dash/underscore only).
 
 ## Requirements
 
-- FOSSBilling 0.5.0 or higher
+- FOSSBilling 0.5.0 or higher (includes Pimple\Container dependency)
 - PHP 7.4 or higher
 - cURL extension enabled
+- JSON extension enabled (for webhook processing)
 
 ## Support
 

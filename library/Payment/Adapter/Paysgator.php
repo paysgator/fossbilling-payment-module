@@ -67,6 +67,9 @@ class Payment_Adapter_Paysgator
     {
     
         $invoiceModel = $this->di['db']->load('Invoice', $invoice_id);
+        if (!$invoiceModel) {
+            throw new Exception('Invoice not found');
+        }
         $invoiceService = $this->di['mod_service']('Invoice');
         $invoice = $invoiceService->toApiArray($invoiceModel, true);
 
@@ -100,15 +103,24 @@ class Payment_Adapter_Paysgator
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
         $response = curl_exec($ch);
-        $result = json_decode($response, true);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+        
+        if ($response === false || $httpCode >= 400) {
+            error_log('Paysgator API Error: ' . $curlError . ' HTTP Code: ' . $httpCode);
+            return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
+        }
+        
+        $result = json_decode($response, true);
 
         if (isset($result['success']) && $result['success'] && isset($result['data']['checkoutUrl'])) {
             // Retorna um JavaScript para redirecionamento imediato
             return '<script type="text/javascript">window.location.href = "' . $result['data']['checkoutUrl'] . '";</script>';
         }
 
-        return 'Erro ao processar pagamento com Paysgator: ' . $response . '. Por favor, contate o suporte.' . json_encode($data) . 'Dados enviados';
+        error_log('Paysgator Payment Error: ' . $response);
+        return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
     }
 
     /**
