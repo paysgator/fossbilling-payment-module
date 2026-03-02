@@ -12,13 +12,13 @@
 
 class Payment_Adapter_Paysgator
 {
-    protected ?Pimple\Container $di = null;
+    protected $di = null;
 
     public function __construct(private $config)
     {
     }
 
-    public function setDi(Pimple\Container $di): void
+    public function setDi($di): void
     {
         $this->di = $di;
     }
@@ -70,7 +70,7 @@ class Payment_Adapter_Paysgator
         $invoiceService = $this->di['mod_service']('Invoice');
         $invoice = $invoiceService->toApiArray($invoiceModel, true);
 
-        $externalTxId = substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $invoice_id . 'inv' . time()), 0, 15);
+        $externalTxId = substr(preg_replace('/[^a-zA-Z0-9_-]/', '', 'inv' . $invoice_id . time()), 0, 32);
 
        $data = [
            'amount' => (double)$invoiceService->getTotalWithTax($invoiceModel),
@@ -101,14 +101,19 @@ class Payment_Adapter_Paysgator
 
         $response = curl_exec($ch);
         $result = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($result)) {
+            error_log('Paysgator API Error: Invalid JSON response');
+            return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
+        }
         curl_close($ch);
 
         if (isset($result['success']) && $result['success'] && isset($result['data']['checkoutUrl'])) {
             // Retorna um JavaScript para redirecionamento imediato
-            return '<script type="text/javascript">window.location.href = "' . $result['data']['checkoutUrl'] . '";</script>';
+            return '<script type="text/javascript">window.location.href = "' . htmlspecialchars($result['data']['checkoutUrl'], ENT_QUOTES, 'UTF-8') . '";</script>';
         }
 
-        return 'Erro ao processar pagamento com Paysgator: ' . $response . '. Por favor, contate o suporte.' . json_encode($data) . 'Dados enviados';
+        error_log('Paysgator Payment Error: ' . $response);
+        return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
     }
 
     /**
@@ -118,7 +123,15 @@ class Payment_Adapter_Paysgator
     {
         try {
             $rawPayload = file_get_contents('php://input');
+            if ($rawPayload === false) {
+                error_log('Paysgator Webhook Error: Failed to read input stream');
+                return false;
+            }
             $webhookData = json_decode($rawPayload, true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($webhookData)) {
+                error_log('Paysgator Webhook Error: Invalid JSON payload');
+                return false;
+            }
             
             // Verificação de Assinatura
             $signature = $_SERVER['HTTP_X_PAYSGATOR_SIGNATURE'] ?? '';
@@ -161,7 +174,12 @@ class Payment_Adapter_Paysgator
             $tx->note = $tx_desc;
             $tx->updated_at = date('Y-m-d H:i:s');
 
-            return $this->di['db']->store($tx);
+            $storeResult = $this->di['db']->store($tx);
+            if (!$storeResult) {
+                error_log('Paysgator Error: Failed to store transaction record');
+                return false;
+            }
+            return $storeResult;
 
         } catch (Exception $e) {
             error_log('Paysgator Error: ' . $e->getMessage());
