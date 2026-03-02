@@ -57,13 +57,17 @@ Configure this URL in your Paysgator Dashboard under Webhooks settings.
 - Other events are logged but not processed
 
 ### Security
-The module supports HMAC-SHA256 signature verification. To enable:
+The module implements HMAC-SHA256 signature verification for webhook payloads. To enable:
 1. Get your Webhook Secret from Paysgator Dashboard
 2. Enter it in the **Webhook Secret** field in FOSSBilling gateway configuration
 
+**Note**: When configured, all webhook payloads are validated against the signature in `X-Paysgator-Signature` header. Invalid signatures are rejected with an error logged to the system.
+
 ## Transaction ID Format
 
-The module uses a sanitized `externalTransactionId` format: `inv-{invoiceId}` (max 15 characters, alphanumeric with dash/underscore only).
+The module generates `externalTransactionId` as: `{invoiceId}inv{timestamp}` truncated to 15 characters (alphanumeric with dash/underscore only).
+
+**Warning**: The 15-character limit may cause conflicts with large invoice IDs. Ensure your invoice numbering system produces IDs that fit within this constraint to avoid payment reconciliation failures.
 
 ## Requirements
 
