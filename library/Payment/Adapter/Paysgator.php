@@ -60,8 +60,8 @@ class Payment_Adapter_Paysgator
     }
 
     /**
-     * Gera o redirecionamento ou formulário HTML.
-     * No caso da Paysgator, faremos a chamada de API e redirecionaremos o usuário.
+     * Generates HTML redirect or form.
+     * For Paysgator, we make an API call and redirect the user.
      */
     public function getHtml(Api_Handler $api_admin, int $invoice_id, bool $subscription): string
     {
@@ -100,19 +100,26 @@ class Payment_Adapter_Paysgator
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
         $response = curl_exec($ch);
+        $curlError = curl_error($ch);
         $result = json_decode($response, true);
         curl_close($ch);
+
+        if ($response === false || $curlError) {
+            error_log('Paysgator cURL Error: ' . $curlError);
+            return 'Payment processing failed. Please contact support.';
+        }
 
         if (isset($result['success']) && $result['success'] && isset($result['data']['checkoutUrl'])) {
             // Retorna um JavaScript para redirecionamento imediato
             return '<script type="text/javascript">window.location.href = "' . $result['data']['checkoutUrl'] . '";</script>';
         }
 
-        return 'Erro ao processar pagamento com Paysgator: ' . $response . '. Por favor, contate o suporte.' . json_encode($data) . 'Dados enviados';
+        error_log('Paysgator Payment Error: ' . $response . ' - Data: ' . json_encode($data));
+        return 'Payment processing failed. Please contact support.';
     }
 
     /**
-     * Processa o Webhook/IPN
+     * Processes Webhook/IPN notifications
      */
     public function processTransaction(Api_Handler $api_admin, int $id, array $data, int $gateway_id)
     {
@@ -139,7 +146,13 @@ class Payment_Adapter_Paysgator
             
             // Carregar modelos necessários via DI
             $tx = $this->di['db']->getExistingModelById('Transaction', $id);
+            if (!$tx) {
+                throw new Exception('Transaction not found');
+            }
             $invoice = $this->di['db']->getExistingModelById('Invoice', $tx->invoice_id);
+            if (!$invoice) {
+                throw new Exception('Invoice not found');
+            }
             $gateway = $this->di['db']->load('PayGateway', $gateway_id);
             
             $clientService = $this->di['mod_service']('Client');
