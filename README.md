@@ -30,9 +30,9 @@ This module allows you to accept payments via Paysgator in FOSSBilling.
 5. Find **Paysgator** in the list of available gateways and click **Activate**.
 
 6. Configure the following settings:
-   - **API Key**: Required. Your Paysgator API key (obtainable from your Paysgator Dashboard).
-   - **Webhook Secret**: Optional but recommended. Your Paysgator webhook secret for HMAC signature verification.
-   - **Test Mode**: Enable for sandbox testing.
+   - **API Key**: Required. Your Paysgator API key (obtainable from your Paysgator Dashboard). Must be non-empty.
+   - **Webhook Secret**: Optional but recommended. Your Paysgator webhook secret for HMAC-SHA256 signature verification.
+   - **Test Mode**: Enable for sandbox testing. Use radio button to select Yes/No.
 
 7. Click **Save**.
 
@@ -48,7 +48,7 @@ Paysgator will send webhooks to notify FOSSBilling of payment events.
 
 **Webhook URL**: `https://your-fossbilling-domain.com/ipn.php?gateway_id=X`
 
-(Replace `X` with your Paysgator gateway ID from FOSSBilling)
+(Replace `X` with your Paysgator gateway ID from FOSSBilling Admin Panel > System > Payment Gateways)
 
 Configure this URL in your Paysgator Dashboard under Webhooks settings.
 
@@ -63,13 +63,14 @@ The module supports HMAC-SHA256 signature verification. To enable:
 
 ## Transaction ID Format
 
-The module uses a sanitized `externalTransactionId` format: `inv-{invoiceId}` (max 15 characters, alphanumeric with dash/underscore only).
+The module generates a sanitized `externalTransactionId` format: `{invoiceId}inv{timestamp}` (max 15 characters, alphanumeric with dash/underscore only). This ensures uniqueness across multiple payment attempts.
 
 ## Requirements
 
 - FOSSBilling 0.5.0 or higher
 - PHP 7.4 or higher
 - cURL extension enabled
+- OpenSSL extension (for HMAC signature verification)
 
 ## Support
 
