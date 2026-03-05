@@ -10,7 +10,7 @@
  * @license Apache-2.0
  */
 
-class Payment_Adapter_Paysgator
+class Payment_Adapter_Paysgator extends \Payment_AdapterAbstract
 {
     protected ?Pimple\Container $di = null;
 
@@ -88,27 +88,27 @@ class Payment_Adapter_Paysgator
 
         $apiUrl = 'https://paysgator.com/api/v1/payment/create';
         
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $apiUrl);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'X-Api-Key: ' . $this->config['api_key'],
+        $httpClient = $this->di['http_client'];
+        $httpClient->setHeaders([
+            'Content-Type' => 'application/json',
+            'X-Api-Key' => $this->config['api_key'],
         ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-
-        $response = curl_exec($ch);
-        $result = json_decode($response, true);
-        curl_close($ch);
+        $httpClient->setTimeout(30);
+        
+        try {
+            $response = $httpClient->post($apiUrl, $data);
+            $result = $response->json();
+        } catch (Exception $e) {
+            error_log('Paysgator API Error: ' . $e->getMessage());
+            return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
+        }
 
         if (isset($result['success']) && $result['success'] && isset($result['data']['checkoutUrl'])) {
             // Retorna um JavaScript para redirecionamento imediato
             return '<script type="text/javascript">window.location.href = "' . $result['data']['checkoutUrl'] . '";</script>';
         }
 
-        return 'Erro ao processar pagamento com Paysgator: ' . $response . '. Por favor, contate o suporte.' . json_encode($data) . 'Dados enviados';
+        return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
     }
 
     /**
