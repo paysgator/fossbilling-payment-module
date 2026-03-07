@@ -45,7 +45,8 @@ class Payment_Adapter_Paysgator
                 'webhook_secret' => [
                     'text', [
                         'label' => 'Webhook Secret',
-                        'description' => 'Optional: Enter your Paysgator Webhook Secret for signature verification',
+                        'description' => 'Required: Enter your Paysgator Webhook Secret for HMAC signature verification',
+                        'validators' => ['nonempty'],
                     ],
                 ],
                 'test_mode' => [
@@ -86,7 +87,7 @@ class Payment_Adapter_Paysgator
            ],
        ];
 
-        $apiUrl = 'https://paysgator.com/api/v1/payment/create';
+        $apiUrl = ($this->config['test_mode'] ?? '0') == '1' ? 'https://sandbox.paysgator.com/api/v1/payment/create' : 'https://paysgator.com/api/v1/payment/create';
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $apiUrl);
@@ -108,7 +109,7 @@ class Payment_Adapter_Paysgator
             return '<script type="text/javascript">window.location.href = "' . $result['data']['checkoutUrl'] . '";</script>';
         }
 
-        return 'Erro ao processar pagamento com Paysgator: ' . $response . '. Por favor, contate o suporte.' . json_encode($data) . 'Dados enviados';
+        error_log('Paysgator Payment Error: ' . $response); return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
     }
 
     /**
@@ -124,13 +125,13 @@ class Payment_Adapter_Paysgator
             $signature = $_SERVER['HTTP_X_PAYSGATOR_SIGNATURE'] ?? '';
             $webhookSecret = $this->config['webhook_secret'] ?? '';
 
-            if (!empty($webhookSecret)) {
-                $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
-                if (!hash_equals($expectedSignature, $signature)) {
-                    throw new Exception('Invalid webhook signature');
-                }
+            if (empty($webhookSecret)) {
+                throw new Exception('Webhook secret not configured');
             }
-
+            $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
+            if (!hash_equals($expectedSignature, $signature)) {
+                throw new Exception('Invalid webhook signature');
+            }
             if (($webhookData['event'] ?? '') !== 'payment.success') {
                 return false;
             }
