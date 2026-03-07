@@ -31,7 +31,7 @@ This module allows you to accept payments via Paysgator in FOSSBilling.
 
 6. Configure the following settings:
    - **API Key**: Required. Your Paysgator API key (obtainable from your Paysgator Dashboard).
-   - **Webhook Secret**: Optional but recommended. Your Paysgator webhook secret for HMAC signature verification.
+   - **Webhook Secret**: Required. Your Paysgator webhook secret for HMAC-SHA256 signature verification.
    - **Test Mode**: Enable for sandbox testing.
 
 7. Click **Save**.
@@ -39,7 +39,7 @@ This module allows you to accept payments via Paysgator in FOSSBilling.
 ## Configuration
 
 - **API Key**: Required. Your Paysgator API key (Live or Test).
-- **Webhook Secret**: Optional. Your Paysgator webhook secret for HMAC-SHA256 signature verification.
+- **Webhook Secret**: Required. Your Paysgator webhook secret for HMAC-SHA256 signature verification.
 - **Test Mode**: Enable for sandbox testing.
 
 ## Webhooks
@@ -57,13 +57,13 @@ Configure this URL in your Paysgator Dashboard under Webhooks settings.
 - Other events are logged but not processed
 
 ### Security
-The module supports HMAC-SHA256 signature verification. To enable:
+HMAC-SHA256 signature verification is required for all webhook communications. To configure:
 1. Get your Webhook Secret from Paysgator Dashboard
 2. Enter it in the **Webhook Secret** field in FOSSBilling gateway configuration
 
 ## Transaction ID Format
 
-The module uses a sanitized `externalTransactionId` format: `inv-{invoiceId}` (max 15 characters, alphanumeric with dash/underscore only).
+The module uses a sanitized `externalTransactionId` format: `inv-{invoiceId}` (max 15 characters, alphanumeric with dash/underscore only). Ensure your FOSSBilling invoice IDs are short enough to fit within this limit when combined with the 'inv' prefix.
 
 ## Requirements
 
