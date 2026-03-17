@@ -108,7 +108,7 @@ class Payment_Adapter_Paysgator
             return '<script type="text/javascript">window.location.href = "' . $result['data']['checkoutUrl'] . '";</script>';
         }
 
-        return 'Erro ao processar pagamento com Paysgator: ' . $response . '. Por favor, contate o suporte.' . json_encode($data) . 'Dados enviados';
+        return 'Erro ao processar pagamento com Paysgator. Por favor, contate o suporte.';
     }
 
     /**
@@ -124,11 +124,12 @@ class Payment_Adapter_Paysgator
             $signature = $_SERVER['HTTP_X_PAYSGATOR_SIGNATURE'] ?? '';
             $webhookSecret = $this->config['webhook_secret'] ?? '';
 
-            if (!empty($webhookSecret)) {
-                $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
-                if (!hash_equals($expectedSignature, $signature)) {
-                    throw new Exception('Invalid webhook signature');
-                }
+            if (empty($webhookSecret)) {
+                throw new Exception('Webhook secret is required for signature verification');
+            }
+            $expectedSignature = hash_hmac('sha256', $rawPayload, $webhookSecret);
+            if (!hash_equals($expectedSignature, $signature)) {
+                throw new Exception('Invalid webhook signature');
             }
 
             if (($webhookData['event'] ?? '') !== 'payment.success') {
